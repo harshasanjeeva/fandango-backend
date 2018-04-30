@@ -12,6 +12,7 @@ var expressSessions = require("express-session");
 router.get('/', function (req, res, next) {
     res.send('respond with a resource');
 });
+var mysql=require('mysql');
 
 var nodemailer = require('nodemailer');
 var transporter = nodemailer.createTransport({
@@ -23,6 +24,16 @@ var transporter = nodemailer.createTransport({
 });
 
 var dummy="dummy";
+
+const redis = require('redis');
+/*const REDIS_PORT = 6379;
+console.log("redis port is",REDIS_PORT);*/
+
+const client = redis.createClient();
+
+client.on('connect',function(){
+    console.log("Connected to Redis");
+});
 
 
 router.post('/login', function (req, res, next) {
@@ -81,11 +92,11 @@ router.post('/adminLogin', function (req, res, next) {
             }
             else {
 
-                //dummy=user.Username;
+                console.log('Admin Found with email ' + user.email);
                 res.json({
-                    email: email,
+                    email: user.email,
                     status: true,
-                    user_id: user.user_id
+                    user_id: user.adminId
                 });
             }
         });
@@ -350,29 +361,82 @@ router.post('/addmovies', function (req, res, next) {
 router.post('/getmovies', function (req, res, next) {
 
     console.log("Reached all get movies");
-    mongo.connect(function (db) {
-        console.log("Connected to MongoDB at ", url)
+    client.hgetall("allMovies",function (err,obj) {
+        if(!obj)
+        {
+            console.log("movies not found in redis");
+            mongo.connect(function (db) {
+                console.log("Connected to MongoDB at ", url)
 
-        mongo.connect(function (db) {
-            var coll = db.collection('movietable');
-            console.log("dummy");
-            coll.find({}).toArray(function (err, user) {
-                if (err) {
-                    console.log("err")
-                    res.json({
-                        status: '401'
+                mongo.connect(function (db) {
+                    var coll = db.collection('movietable');
+                    console.log("dummy");
+                    coll.find({}).toArray(function (err, user) {
+                        if (err) {
+                            console.log("err")
+                            res.json({
+                                status: '401'
+                            });
+                        }
+                        else {
+                            console.log("no err",user);
+                            var array=[];
+                            var g=0;
+                            while(g<user.length)
+                            {
+                                array.push(g);
+                                array.push(JSON.stringify(user[g]));
+                                g++;
+                            }
+                            client.hmset("allMovies",array,function (error,reply) {
+                                if(error){
+                                    console.log(error);
+                                }
+                                console.log(reply);
+
+                            });
+                            client.expire('allMovies', 30);;
+                            res.json({
+                                moviedata: user
+                            });
+                        }
                     });
-                }
-                else {
-                    console.log("no err",user)
-                    res.json({
-                        moviedata: user
-                    });
-                }
+                });
             });
-        });
+        }
+        else{
+            var array=[];
+            var g=0;
+            while(g<Object.keys(obj).length)
+            {
+                console.log("key is: ", g);
+                console.log("value is: ", Object.values(obj)[g]);
+                array.push(JSON.parse(Object.values(obj)[g]));
+                g++;
+            }
+            console.log("array is: ", array);
+            res.json({
+                moviedata: array
+            });
+
+        }
+        
     });
+
 });
+/*
+function cache(req, res, next) {
+    const org = req.query.org;
+    client.get(org, function (err, data) {
+        if (err) throw err;
+
+        if (data != null) {
+            res.send(respond(org, data));
+        } else {
+            next();
+        }
+    });
+}*/
 
 
 
@@ -563,7 +627,53 @@ router.post('/payment', function (req, res, next) {
         student:student,
         children:children,
         general:general
-    }
+    };
+
+    var dataSql = [
+        user_id,
+        name,
+        creditcard,
+        cvv,
+        expdate,
+        movieid,
+        movieName,
+        genre,
+        release,
+        total_amount,
+        total_tickets,
+        timings,
+        theatrename,
+        student,
+        children,
+        general
+    ]
+
+    var con = mysql.createConnection({
+        host: "localhost",
+        user: "root",
+        password: "1111",
+        database: "fandango"
+    });
+
+
+    con.connect(function (err) {
+        var flag = false;
+        if (err)
+            throw err;
+        var json_responses;
+        var sql = "insert into payment values (0,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+        con.query(sql, dataSql, function (err, result, fields) {
+            if (err)
+                throw err;
+            else {
+                res.json({
+                    value:dataSql,
+                    status: true,
+                });
+            }
+        });
+
+    });
 
     mongo.connect(function(db){
         console.log("Connected to MongoDB at ",url)
@@ -587,8 +697,6 @@ router.post('/payment', function (req, res, next) {
         });
     });
 });
-
-
 
 
 
@@ -721,6 +829,8 @@ router.post('/viewprofile', function (req, res) {
         });
     });
 });
+
+
 
 
 
