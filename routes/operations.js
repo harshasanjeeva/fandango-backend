@@ -298,7 +298,7 @@ router.post('/addmovies', function (req, res, next) {
         movieType: movieType,
         rating:rating,
         movieVideoLink:movieVideoLink,
-        photos: photos,
+        movieLink: photos,
         length: length,
         reviews: reviews
     }
@@ -697,7 +697,7 @@ router.post('/payment', function (req, res, next) {
 
     mongo.connect(function(db){
         console.log("Connected to MongoDB at ",url)
-
+        var coll = db.collection('moviehalldetails');
         mongo.insertDocument(db,'payment',data,function (err,results) {
             if (err) {
                 console.log("sending status 401")
@@ -707,12 +707,49 @@ router.post('/payment', function (req, res, next) {
             }
             else {
                 console.log("payment added successfully")
+
                 var path = results["ops"][0]["_id"];
                 console.log(path);
-                res.json({
-                    value:data,
-                    status: true,
+
+
+                coll.findOne({'moviename': movieName}, function (err, user) {
+                    if (err) {
+                        res.json({
+                            status: false
+                        });
+                    }
+                    else if(!user)
+                    {
+                        console.log("movie not found")
+                        res.send(404)
+                    }
+                    else {
+                        console.log(user);
+                        var remaining_ticket = user.tickets - total_tickets;
+                        var myquery = {moviename:movieName};
+                        var newvalues = { $set: {tickets: remaining_ticket  } };
+                        coll.updateOne(myquery, newvalues, function (err, user) {
+                            if (err) {
+                                console.log("err")
+                                res.json({
+                                    status: '401'
+                                });
+                            }
+                            else {
+                                console.log(user)
+                                console.log("updated successfully")
+                                res.json({
+                                    value:data,
+                                    status: true,
+                                });
+
+                            }
+                        });
+
+                    }
                 });
+
+
             }
         });
     });
@@ -741,10 +778,11 @@ router.post('/viewAllUsers', function (req, res, next) {
                 });
             }
             else {
-                var path = results["ops"][0]["_id"];
-                console.log(path);
+                //var path = results["ops"][0]["_id"];
+                console.log("all useres",user);
+
                 res.json({
-                    value:data,
+                    value:user,
                     status: true,
                 });
             }
@@ -982,7 +1020,7 @@ router.post('/editmoviehalldata', function (req, res, next) {
         mongo.connect(function (db) {
             var coll = db.collection('moviehalldetails');
             console.log("dummy");
-            var myquery = {hallId };
+            var myquery = {hallId:hallId };
             var newvalues = { $set: {moviename: moviename, time1: time1, time2: time2, time3: time3, time4: time4, time5: time5, tickets: tickets, screen: screen, price: price } };
             coll.updateOne(myquery, newvalues, function (err, user) {
                 if (err) {
@@ -1021,7 +1059,42 @@ router.post('/addmoviehalldata', function (req, res, next) {
         var hallId =  req.body.hallId
         var screen = req.body.screen;
         var price = req.body.price;
-        var movieTiming = req.body.movieTiming;
+        var movieTimings = [];
+        if(time1.length >0)
+        {
+            movieTimings.push(time1);
+
+        }
+
+    if(time2.length >0)
+    {
+        movieTimings.push(time2);
+
+    }
+
+    if(time3.length >0)
+    {
+        movieTimings.push(time3);
+
+    }
+
+    if(time4.length >0)
+    {
+        movieTimings.push(time4);
+
+    }
+
+    if(time5.length >0)
+    {
+        movieTimings.push(time5);
+
+    }
+
+
+
+
+
+
 
         var data = {
             moviename : moviename,
@@ -1035,7 +1108,8 @@ router.post('/addmoviehalldata', function (req, res, next) {
             tickets: tickets,
             screen: screen,
             price : price,
-            movieTiming:movieTiming
+            movieTiming:movieTimings,
+
 
 
         }
@@ -1449,26 +1523,42 @@ router.post('/pageclicks', function (req, res, next) {
     //var hallId=0;
     //var hall_name='';
     //var hall_address='';
-
+    var users_list=[];
     var pages_list=['Movies', 'Movies details', 'Number of Tickets', 'Payments', 'Tickets', 'Profile', 'Reviews'];
     var i=0;
     var j=0;
+    var k=0;
     var data={
-        users:[],
-        clicks:[]
+        Movies_users:[],
+        Movies_clicks:[],
+        Movies_details_users:[],
+        Movies_details_clicks:[],
+        Nooftickets_users:[],
+        Nooftickets_clicks:[],
+        Payments_users:[],
+        Payments_clicks:[],
+        Tickets_users:[],
+        Tickets_clicks:[],
+        Profile_users:[],
+        Profile_clicks:[],
+        Reviews_users:[],
+        Reviews_clicks:[]
+
 
     };
 
     mongo.connect(function (db) {
+
+        var coll = db.collection('usertable');
         var coll2 = db.collection('analytics');
-        coll2.find({}).toArray(function (err, user) {
+        coll.find({}).toArray(function (err, user) {
             if (err) {
                 res.json({
                     status: false
                 });
             }
             if (!user) {
-                console.log('usertable query for all users unsuccessfull');
+                console.log('users query for all users unsuccessfull');
 
                 res.json({
                     status: false
@@ -1478,37 +1568,249 @@ router.post('/pageclicks', function (req, res, next) {
             else {
 
                 //dummy=user.Username;
-                var total=0;
-                len1 = pages_list.length;
-                for(i=0;i<len1;i++)
+
+
+
+                console.log("users query for all users successfull", user);
+                for(i=0;i<4;i++)
                 {
-                    data.pages.push(pages_list[i]);
-                    for(j=0;j<user.length;j++)
-                    {
-                        if(pages_list[i]==user[j].componentname)
-                        {
-                            total +=parseInt(user[j].total_amount);
-                        }
-
-                    }
-
-                    data.amount.push(total);
-                    total=0;
+                    users_list.push(user[i].user_id);
 
                 }
+                console.log("users_list:",users_list);
+                coll2.find({}).toArray(function (err, user) {
+                    if (err) {
+                        res.json({
+                            status: false
+                        });
+                    }
+                    if (!user) {
+                        console.log('analytics query fail ');
 
-                console.log("final data",data);
+                        res.json({
+                            status: false
+
+                        });
+                    }
+                    else {
+
+                        //dummy=user.Username;
+                        var total=0;
+                        len1 = pages_list.length;
+                        for(i=0;i<len1;i++)
+                        {
+                            //data.pages.push(pages_list[i]);
+                            for(k=0;k<4;k++) {
+                                for (j = 0; j < user.length; j++) {
+                                    if (pages_list[i] == user[j].componentname && users_list[k] == user[j].userid) {
+                                        if (i == 0) {
+                                            data.Movies_users.push(user[j].userid);
+                                            data.Movies_clicks.push(user[j].numofclicks);
+                                        }
+
+                                        if (i == 1) {
+                                            data.Movies_details_users.push(user[j].userid);
+                                            data.Movies_details_clicks.push(user[j].numofclicks);
+                                        }
+
+                                        if (i == 2) {
+                                            data.Nooftickets_users.push(user[j].userid);
+                                            data.Nooftickets_clicks.push(user[j].numofclicks);
+                                        }
+
+                                        if (i == 3) {
+                                            data.Payments_users.push(user[j].userid);
+                                            data.Payments_clicks.push(user[j].numofclicks);
+                                        }
+
+                                        if (i == 4) {
+                                            data.Tickets_users.push(user[j].userid);
+                                            data.Tickets_clicks.push(user[j].numofclicks);
+                                        }
+
+                                        if (i == 5) {
+                                            data.Profile_users.push(user[j].userid);
+                                            data.Profile_clicks.push(user[j].numofclicks);
+                                        }
+                                        if (i == 6) {
+                                            data.Reviews_users.push(user[j].userid);
+                                            data.Reviews_clicks.push(user[j].numofclicks);
+                                        }
+                                    }
+
+                                }
+                            }
 
 
+                        }
+
+                        console.log("final data",data);
+
+                        var Reviews_clicks1=[23,45,67];
+
+                        res.json({
+                            status: true,
+                            Movies_users: data.Movies_users,
+                            Movies_clicks: data.Movies_clicks,
+                            Movies_details_users: data.Movies_details_users,
+                            Movies_details_clicks: data.Movies_details_clicks,
+                            Nooftickets_users: data.Nooftickets_users,
+                            Nooftickets_clicks: data.Nooftickets_clicks,
+                            Payments_users: data.Payments_users,
+                            Payments_clicks: data.Payments_clicks,
+                            Tickets_users: data.Tickets_users,
+                            Tickets_clicks: data.Tickets_clicks,
+                            Profile_users: data.Profile_users,
+                            Profile_clicks: data.Profile_clicks,
+                            Reviews_users: data.Reviews_users,
+                            Reviews_clicks: Reviews_clicks1
+
+
+                        });
+
+
+                    }
+                });
+            }
+        });
+    });
+});
+
+
+router.post('/movieclicks', function (req, res, next) {
+
+    // var email = req.body.email;
+    //var password = req.body.password;
+    //console.log("reached movieloginlogin");
+    //console.log("email",email);
+    //console.log("pwd",password);
+    //var hallId=0;
+    //var hall_name='';
+    //var hall_address='';
+    var movies_list=[];
+    var i=0;
+    var j=0;
+    var data={
+        movies:[],
+        clicks:[]
+
+    };
+
+    mongo.connect(function (db) {
+        var coll = db.collection('movietable');
+        var coll2 = db.collection('Movieclicks');
+        coll.find({}).toArray(function (err, user) {
+            if (err) {
+                res.json({
+                    status: false
+                });
+            }
+            if (!user) {
+                console.log('Movie query for all movies unsuccessfull');
 
                 res.json({
-                    status: true,
-                    movies_list:data.movies,
-                    revenue_list: data.amount
+                    status: false
 
                 });
+            }
+            else {
+
+                //dummy=user.Username;
 
 
+
+                console.log("Movie query for all movies successfull", user);
+                for(i=0;i<user.length;i++)
+                {
+                    movies_list.push(user[i].movieName);
+
+                }
+                console.log("movies_list:",movies_list);
+                coll2.find({}).toArray(function (err, user) {
+                    if (err) {
+                        res.json({
+                            status: false
+                        });
+                    }
+                    if (!user) {
+                        console.log('movieclicks query fail ');
+
+                        res.json({
+                            status: false
+
+                        });
+                    }
+                    else {
+
+                        console.log("movieclicks query succesfull and data:",user)
+                        //dummy=user.Username;
+                        var total=0;
+                        len1 = movies_list.length;
+                        console.log("len1",len1)
+                        for(i=0;i<len1;i++)
+                        {
+
+                            for(j=0;j<user.length;j++)
+                            {
+                                console.log("usermovie",user[j].MovieName);
+                                if(movies_list[i]==user[j].MovieName)
+                                {
+
+                                    console.log("movie matched pushing clicks")
+                                    data.movies.push(movies_list[i]);
+                                    data.clicks.push(user[j].numofclicks);
+                                }
+
+
+                            }
+
+
+
+                        }
+
+                        console.log("final data",data);
+
+
+
+                        res.json({
+                            status: true,
+                            movies_list:data.movies,
+                            clicks_list: data.clicks
+
+
+                        });
+                    }
+                });
+            }
+        });
+    });
+});
+
+
+router.post('/billdetails', function (req, res, next) {
+
+    //var user_id = Number(req.body.user_id);
+   // console.log(user_id);
+    console.log("reached bill details");
+
+    mongo.connect(function (db) {
+        var coll = db.collection('payment');
+        coll.find({}).toArray(function (err, user) {
+            if (err) {
+                res.json({
+                    status: false
+                });
+            }
+            else if(!user)
+            {
+                console.log("user not found")
+                res.send(404)
+            }
+            else {
+                console.log(user);
+                res.json({
+                    bill: user
+                });
             }
         });
     });
