@@ -13,6 +13,9 @@ var logout = require('./routes/logout');
 var app = express();
 var passport = require('passport');
 
+
+
+
 /*var mongoSessionURL = "mongodb://devfandango:fandango1@ds251819.mlab.com:51819/sessions";*/
 var expressSessions = require("express-session");
 require('./routes/mongodb/login')(passport);
@@ -22,7 +25,8 @@ var corsOptions = {
     origin: 'http://localhost:3000',
     credentials: true,
     optionsSuccessStatus: 200 // some legacy browsers (IE11, various SmartTVs) choke on 204
-}
+};
+
 
 app.use(cors(corsOptions));
 //app.use(expressValidator());
@@ -61,6 +65,10 @@ app.listen(3001, function () {
 
 
 
+
+
+
+
 app.post('/login', function(req, res) {
     passport.authenticate('login', function(err, user) {
         if(err) {
@@ -86,6 +94,8 @@ app.post('/login', function(req, res) {
         }
 })(req, res);
 });
+
+
 
 app.post('/logout',logout.logout);
 module.exports = app;
